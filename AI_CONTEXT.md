@@ -1,81 +1,61 @@
 # AI_CONTEXT.md
 
+Canonical condensed context for AI agents working in this repository.
+
 ---
 
 ## Project Purpose
-Production-grade AI Resume Analyzer & Career Assistant. Demonstrates reliable AI orchestration, validation, monitoring, and deployment for MLOps/AI system design.
+
+Production-grade AI Resume Analyzer & Career Assistant. Demonstrates reliable AI orchestration, guardrails, validation, monitoring, and deployment for MLOps/AI system design workshops.
 
 ## Architecture Summary
-- **Frontend**: React (Vite, TailwindCSS)
-- **Backend**: FastAPI (Python 3.11)
-- **AI Layer**: Gemini API (structured output, fallback to heuristics)
+
+- **Frontend**: React 19, Vite, TailwindCSS — dark/light mode, tab-based input, loading skeleton
+- **Backend**: FastAPI (Python 3.11) — layered pipeline: validation → guardrails → AI → response
+- **Guardrail Layer**: Rule-based `GuardrailService` — injection rail + topicality rail, zero tokens
+- **AI Layer**: Gemini 2.5 Flash — structured output enforced by `response_json_schema` + Pydantic
+- **Fallback**: `HeuristicResumeService` — local keyword scoring, no external calls
 - **Containerization**: Docker, docker-compose
-- **Deployment**: Backend (Render), Frontend (Firebase Hosting)
+- **Deployment**: Both backend (Docker) and frontend (static) auto-deploy to Render on push to main
 
-## Component Boundaries
-- **Frontend**: UI, form validation, error display, health status, API calls
-- **Backend**: API endpoints, validation, AI orchestration, fallback, monitoring, error handling
-- **AI Layer**: Gemini API integration, schema enforcement, fallback logic
-- **Monitoring**: In-memory metrics, `/metrics` endpoint
+## Request Pipeline
 
-## Key Workflows
-1. User submits resume (text/file), target role, job description
-2. Backend validates input, extracts text if needed
-3. AI analysis via Gemini (timeout/retry); fallback to heuristics if needed
-4. Structured JSON response returned
-5. Metrics and logs recorded for every request
+```
+Input → Pydantic validation → GuardrailService → GeminiResumeService (or HeuristicResumeService) → AnalyzeResponse
+```
 
-## Deployment Model
-- **Backend**: Dockerized, deployed via Render (`render.yaml`), health checks on `/health`
-- **Frontend**: Static build, deployed to Firebase Hosting (`firebase.json`)
-- **Local**: `docker-compose.yml` for unified dev
-- **Secrets**: Managed via environment variables (`.env`)
+GuardrailService runs BEFORE any Gemini call. Zero tokens consumed by guardrail checks.
 
-## API Contracts Summary
-- **POST `/analyze`**: multipart/form-data, fields: `resume_text` or `resume_file`, `target_role`, `job_description`. Returns JSON: `{ ats_score, missing_skills, strengths, recommendations }`
+## Key API Contracts
+
+- **POST `/analyze`**: multipart/form-data — `resume_text` or `resume_file`, `target_role`, `job_description`
+- **Response**: `{ ats_score, missing_skills, strengths, recommendations, engine }`
+- **engine field**: `"gemini"` | `"heuristic"` — always present in every response
 - **GET `/health`**: `{ status, environment, gemini_configured }`
 - **GET `/metrics`**: `{ total_requests, total_errors, average_latency_ms, requests_by_path }`
 
-## Reliability Assumptions
-- Strict schema validation (Pydantic) for all input/output
-- Timeout/retry for AI calls
-- Fallback to local analysis if Gemini fails
-- Centralized error handling, structured logging
-- Health/metrics endpoints for observability
+## Error Codes
 
-## Security Constraints
-- Input validation/sanitization for all user data
-- Only PDF/TXT files accepted, size-limited
-- No persistent user data storage
-- Secrets never hardcoded; loaded from env
-- CORS restricts frontend origins
-- Error responses never leak sensitive info
-- Backend container runs as non-root
+| Code | Status | Meaning |
+|---|---|---|
+| `bad_request` | 400 | Invalid input |
+| `guardrail_violation` | 400 | Injection detected or not a resume |
+| `ai_service_error` | 502 | Gemini API failure |
+| `ai_output_error` | 502 | Gemini returned bad JSON |
+| `ai_configuration_error` | 503 | No API key |
+| `ai_timeout` | 504 | Gemini timed out |
 
-## Operational Conventions
-- All config via environment variables
-- All errors/logs include request IDs
-- Monitoring via `/metrics` (in-memory, not persistent)
-- Health via `/health`
-- No database or persistent storage
-- All deployments must pass health/metrics checks
+## Deployment
 
-## Important Engineering Rules
-- Never bypass schema validation
-- Always log errors with context
-- Fallback logic must be enabled for reliability
-- All new endpoints require strict request/response models
-- No sensitive data in logs or responses
-- All changes must be documented for future agents
+- Backend: `https://llm-ops-workshop-api.onrender.com` (Docker, Render)
+- Frontend: `https://llm-ops-workshop.onrender.com` (Static, Render)
+- Both defined in `render.yaml`, auto-deploy on push to `main`
 
-## Extension Guidance
-- Add endpoints by creating new routers/services (backend)
-- Extend AI logic in Gemini/heuristic services
-- Add validation/monitoring layers as needed
-- Update frontend components for new features
-- Always enforce schema validation and structured outputs
-- Document all changes in agent-native docs
+## Engineering Rules
 
----
-
-**This file is the canonical, condensed context for AI agents.**
+- Never bypass Pydantic schema validation
+- GuardrailService must run before every AI call
+- All config via environment variables — no hardcoded secrets
+- All new endpoints require request + response Pydantic models
+- `engine` field must be set by every service that returns `AnalyzeResponse`
+- Logs must never contain resume text, PII, or API keys

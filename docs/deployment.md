@@ -2,45 +2,105 @@
 
 ## Overview
 
-The system is designed for cloud-native deployment with minimal manual steps. Backend and frontend are containerized and deployable to Render and Firebase Hosting, respectively.
+Both frontend and backend auto-deploy to Render on every push to `main`. No manual deploy steps required after initial setup.
 
-## Backend Deployment (Render)
-
-- **Containerization**: Backend is built as a Docker image using `backend/Dockerfile`.
-- **Render Configuration**: `render.yaml` defines service, health check, and environment variables.
-- **Environment Variables**: All secrets and config are injected at runtime.
-- **Health Checks**: Render pings `/health` for liveness.
-- **Scaling**: Stateless, can be scaled horizontally.
-
-### Deployment Diagram
+## Deployment Diagram
 
 ```mermaid
 flowchart TD
   Dev[Developer]
-  Dev -->|Push code| GitHub[GitHub]
-  GitHub -->|CI/CD| Render[Render Backend]
-  Render -->|Docker Build| Backend[FastAPI API]
-  Backend -->|/health| HealthCheck[Render Health]
+  GH[GitHub\nppradyoth/llm-ops-workshop]
+  RB[Render\nBackend Docker]
+  RF[Render\nFrontend Static]
+  GEM[Gemini API\nGoogle AI]
+
+  Dev -->|git push main| GH
+  GH -->|auto-deploy| RB
+  GH -->|auto-deploy| RF
+  RB -->|API calls| GEM
+  RF -->|HTTP requests| RB
 ```
 
-## Frontend Deployment (Firebase)
+## Services
 
-- **Build**: Vite builds static assets to `dist/`.
-- **Firebase Hosting**: `firebase.json` configures rewrites and public directory.
-- **CI/CD**: GitHub Actions can automate deploys.
+| Service | Type | Platform | URL |
+|---|---|---|---|
+| `ai-resume-analyzer-api` | Docker web service | Render | `https://llm-ops-workshop-api.onrender.com` |
+| `ai-resume-analyzer-frontend` | Static site | Render | `https://llm-ops-workshop.onrender.com` |
 
-### Deployment Flow
+Both are defined in [`render.yaml`](../render.yaml).
 
-1. Developer pushes code to GitHub.
-2. GitHub Actions run tests and build images.
-3. Backend is deployed to Render via Docker.
-4. Frontend is deployed to Firebase Hosting.
+## Backend (Docker)
+
+- **Docker context**: `./backend`
+- **Dockerfile**: `./backend/Dockerfile`
+- **Health check**: `/health` — Render waits for 200 before marking deploy successful
+- **Free tier caveat**: Spins down after ~15 min of inactivity; first request after sleep takes ~30s
+
+### Required environment variables (set in Render dashboard)
+
+| Variable | Value |
+|---|---|
+| `GEMINI_API_KEY` | Your Google AI Studio key |
+| `CORS_ORIGINS` | `https://llm-ops-workshop.onrender.com` |
+| `ENABLE_AI_FALLBACK` | `false` (production) |
+
+## Frontend (Static Site)
+
+- **Root directory**: `frontend`
+- **Build command**: `npm install && npm run build`
+- **Publish directory**: `dist`
+- **SPA rewrite**: All routes rewrite to `/index.html` (configured in `render.yaml`)
+
+### Required environment variables (set in Render dashboard)
+
+| Variable | Value |
+|---|---|
+| `VITE_API_BASE_URL` | `https://llm-ops-workshop-api.onrender.com` |
 
 ## Local Development
 
-- Use `docker-compose.yml` to run both backend and frontend locally.
-- Hot reload supported for development.
+```bash
+# Backend
+cd backend && source .venv/bin/activate
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
-## Environment Variables
+# Frontend
+cd frontend && npm run dev
+```
 
-- All sensitive config is managed via `.env` files and Render/Firebase secrets.
+Or with Docker:
+
+```bash
+docker compose up --build backend
+```
+
+## CI Reference
+
+`.github/workflows/ci.yml` is included as a reference for workshop participants. It is set to `workflow_dispatch` (manual only) due to account billing. To enable automatic runs on push, update the `on:` trigger and ensure GitHub Actions billing is active.
+
+To run checks locally:
+
+```bash
+# Backend tests
+cd backend && pytest
+
+# Frontend build check
+cd frontend && npm run build
+```
+
+## Environment Variable Reference
+
+| Variable | Default | Where |
+|---|---|---|
+| `GEMINI_API_KEY` | — | Backend (Render) |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Backend |
+| `GEMINI_TIMEOUT_SECONDS` | `30` | Backend |
+| `GEMINI_RETRY_ATTEMPTS` | `3` | Backend |
+| `ENABLE_AI_FALLBACK` | `true` (dev), `false` (prod) | Backend |
+| `CORS_ORIGINS` | `http://localhost:5173` | Backend |
+| `ENVIRONMENT` | `development` | Backend |
+| `LOG_LEVEL` | `INFO` | Backend |
+| `MAX_RESUME_CHARS` | `20000` | Backend |
+| `MAX_UPLOAD_MB` | `5` | Backend |
+| `VITE_API_BASE_URL` | `http://localhost:8000` | Frontend |

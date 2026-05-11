@@ -1,171 +1,150 @@
-# AI Resume Analyzer and Career Assistant
+# AI Resume Analyzer
 
-A production-style fullstack workshop project that demonstrates AI orchestration, FastAPI backend patterns, Gemini API integration, structured outputs, Docker, CI/CD, monitoring, and deployment readiness.
+A production-style fullstack MLOps workshop project demonstrating AI orchestration, guardrails, FastAPI backend patterns, Gemini API integration, structured outputs, Docker, CI/CD, and cloud deployment.
+
+**Live demo:** [https://llm-ops-workshop.onrender.com](https://llm-ops-workshop.onrender.com)
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-  A["React + Vite frontend"] --> B["FastAPI backend API"]
-  B --> C["Validation layer"]
-  C --> D["Gemini API service"]
-  D --> E["Structured Pydantic outputs"]
-  B --> F["Logging and metrics"]
+  A["React + Vite Frontend"] --> B["FastAPI Backend"]
+  B --> C["Validation (Pydantic)"]
+  C --> D["Guardrail Service"]
+  D --> E["Gemini API Service"]
+  E --> F["Structured Output (Pydantic)"]
+  D --> G["Heuristic Fallback"]
+  B --> H["Logging & Metrics"]
 ```
 
 ## Features
 
-- Upload a PDF/TXT resume or paste resume text.
-- Submit a target role and optional job description.
-- Generate an ATS score.
-- Identify missing skills and resume strengths.
-- Return structured JSON recommendations.
-- Use Gemini structured output mode in production.
-- Use a local heuristic fallback for development and CI when no API key is set.
-- Expose `/health` and `/metrics` endpoints.
+- Upload PDF/TXT resume or paste text
+- Set a target role and optional job description
+- Gemini-powered ATS scoring with structured JSON output
+- Rule-based guardrails — prompt injection detection and topicality checks, zero tokens used
+- Heuristic fallback when Gemini is unavailable
+- `engine` field in every response indicating `gemini` or `heuristic`
+- Dark / light mode with system preference detection
+- `/health`, `/metrics`, `/live`, `/ready` observability endpoints
 
 ## Folder Structure
 
-```text
+```
 .
-├── backend
-│   ├── app
-│   │   ├── middleware
-│   │   ├── routers
-│   │   ├── schemas
-│   │   ├── services
-│   │   └── utils
-│   ├── tests
-│   ├── Dockerfile
-│   └── requirements.txt
-├── frontend
-│   ├── src
-│   │   ├── components
-│   │   └── lib
-│   ├── firebase.json
-│   └── package.json
-├── .github/workflows/ci.yml
+├── backend/
+│   ├── app/
+│   │   ├── middleware/       # Request context
+│   │   ├── routers/          # analyze, health
+│   │   ├── schemas/          # Pydantic models
+│   │   ├── services/         # gemini, heuristic, guardrail, resume, monitoring
+│   │   └── utils/            # logging, pdf, retry, exceptions
+│   └── tests/
+├── frontend/
+│   └── src/
+│       ├── components/       # Logo, AnalysisForm, ResultPanel, HealthBadge, ThemeToggle
+│       └── lib/              # api.js
+├── docs/                     # Architecture, backend, frontend, security, deployment docs
+├── .github/workflows/        # CI reference (manual trigger only)
 ├── docker-compose.yml
-├── render.yaml
-└── .env.example
+├── render.yaml               # Backend (Docker) + Frontend (static) on Render
+└── WORKSHOP.md               # Hands-on demo guide with guardrail bypass scenarios
 ```
 
 ## Local Setup
-
-Create environment files:
 
 ```bash
 cp .env.example .env
 cp frontend/.env.example frontend/.env
 ```
 
-Add your Gemini key to `.env` when you want live AI responses:
+Set `GEMINI_API_KEY` in `.env` for live AI; leave `ENABLE_AI_FALLBACK=true` for demos without a key.
 
-```bash
-GEMINI_API_KEY=your_key_here
-ENABLE_AI_FALLBACK=false
-```
-
-Leave `ENABLE_AI_FALLBACK=true` for local demos without a Gemini key.
-
-## Backend
+### Backend
 
 ```bash
 cd backend
-python3.11 -m venv .venv
-source .venv/bin/activate
+python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Useful endpoints:
-
-- `GET http://localhost:8000/health`
-- `GET http://localhost:8000/live`
-- `GET http://localhost:8000/ready`
-- `GET http://localhost:8000/metrics`
-- `POST http://localhost:8000/analyze`
-
-Example API call:
-
-```bash
-curl -X POST http://localhost:8000/analyze \
-  -F "target_role=MLOps Engineer" \
-  -F "resume_text=MLOps Engineer with Python, FastAPI, Docker, monitoring, CI/CD, and cloud deployment experience. Built production APIs and improved release reliability by 35 percent."
-```
-
-## Frontend
+### Frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev    # http://localhost:5173
 ```
 
-Open `http://localhost:5173`.
-
-## Dockerized Backend
+### Docker
 
 ```bash
 docker compose up --build backend
 ```
 
-The backend will run at `http://localhost:8000`.
-
-## Render Deployment
-
-This repo includes `render.yaml` for a Docker-based Render web service.
-
-Set these environment variables in Render:
-
-- `GEMINI_API_KEY`
-- `CORS_ORIGINS`, for example your Firebase Hosting URL
-- `ENABLE_AI_FALLBACK=false`
-
-Render will use:
-
-- Docker context: `./backend`
-- Dockerfile: `./backend/Dockerfile`
-- Health check: `/health`
-
-## Firebase Hosting
-
-From the frontend directory:
+## Running Tests
 
 ```bash
-npm run build
-firebase init hosting
-firebase deploy
+cd backend && source .venv/bin/activate
+pytest          # all 15 tests
+pytest tests/test_guardrails.py -v   # guardrail tests only
 ```
 
-Use `frontend/firebase.json` and set:
+## API
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/analyze` | Analyze a resume — returns ATS score, gaps, strengths, recommendations |
+| GET | `/health` | System health and Gemini config status |
+| GET | `/metrics` | In-memory request counts, error rate, latency |
+| GET | `/live` | Liveness probe |
+| GET | `/ready` | Readiness probe |
+
+### Example
 
 ```bash
-VITE_API_BASE_URL=https://your-render-service.onrender.com
+curl -X POST http://localhost:8000/analyze \
+  -F "target_role=MLOps Engineer" \
+  -F "resume_text=MLOps Engineer with Python, FastAPI, Docker, monitoring, CI/CD experience."
 ```
 
-before building for production.
-
-## CI/CD
-
-GitHub Actions runs:
-
-- Backend dependency install and pytest.
-- Frontend dependency install and production build.
-
-The workflow is defined at `.github/workflows/ci.yml`.
-
-## API Response Shape
+### Response shape
 
 ```json
 {
   "ats_score": 82,
-  "missing_skills": [],
-  "strengths": [],
-  "recommendations": []
+  "missing_skills": ["kubernetes", "terraform"],
+  "strengths": ["docker", "ci/cd", "fastapi"],
+  "recommendations": ["Add quantified impact to each bullet."],
+  "engine": "gemini"
 }
 ```
 
-## Notes for Workshops
+## Deployment
 
-The backend keeps the AI provider behind `GeminiResumeService`, so you can teach orchestration and reliability without mixing provider calls into the route layer. Validation happens before AI calls, structured output is enforced by Pydantic, and logs are emitted as JSON for easier monitoring demos.
+Both services auto-deploy to Render on every push to `main`.
+
+| Service | Platform | URL |
+|---|---|---|
+| Backend (FastAPI + Docker) | Render | `https://llm-ops-workshop-api.onrender.com` |
+| Frontend (React static) | Render | `https://llm-ops-workshop.onrender.com` |
+
+See [`render.yaml`](render.yaml) for the full IaC config and [`docs/deployment.md`](docs/deployment.md) for details.
+
+## Workshop Guide
+
+See [`WORKSHOP.md`](WORKSHOP.md) for the full hands-on demo including guardrail bypass scenarios.
+
+## Docs
+
+| File | Contents |
+|---|---|
+| [`docs/architecture.md`](docs/architecture.md) | System and component architecture |
+| [`docs/backend.md`](docs/backend.md) | Backend orchestration and request pipeline |
+| [`docs/frontend.md`](docs/frontend.md) | Frontend components and data flow |
+| [`docs/security.md`](docs/security.md) | Guardrails, security measures |
+| [`docs/reliability.md`](docs/reliability.md) | Retry, fallback, error handling |
+| [`docs/deployment.md`](docs/deployment.md) | Render deployment, env vars |
+| [`docs/api_contracts.md`](docs/api_contracts.md) | Full API reference |
+| [`docs/troubleshooting.md`](docs/troubleshooting.md) | Common issues and fixes |
