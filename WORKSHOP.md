@@ -261,7 +261,103 @@ To trigger the reference CI manually: GitHub → Actions → CI → Run workflow
 
 ---
 
-## 7. Architecture Summary for Presenters
+## 7. Security Scanning with Trivy
+
+Trivy is an open-source vulnerability scanner that checks for CVEs in dependencies, accidentally committed secrets, and container/Dockerfile misconfigurations — all for free with no account required.
+
+### What Trivy scans in this project
+
+| Scan type | What it checks |
+|---|---|
+| `vuln` | CVEs in `requirements.txt` (Python) and `package-lock.json` (npm) |
+| `secret` | API keys, tokens, passwords accidentally committed to the repo |
+| `misconfig` | Dockerfile and docker-compose security misconfigurations |
+| image scan | OS packages and libraries inside the built Docker image |
+
+### Install Trivy
+
+```bash
+# macOS
+brew install aquasecurity/trivy/trivy
+
+# Linux
+sudo apt install trivy
+
+# Anywhere (via Docker — no install needed)
+docker run --rm -v $(pwd):/repo aquasec/trivy fs /repo --scanners vuln,secret,misconfig
+```
+
+### Demo A — Filesystem scan (deps + secrets + misconfig)
+
+Run from the repo root:
+
+```bash
+trivy fs . --scanners vuln,secret,misconfig --severity HIGH,CRITICAL
+```
+
+This scans:
+- Python packages in `backend/requirements.txt`
+- npm packages in `frontend/package-lock.json`
+- All files for hardcoded secrets or API keys
+- `backend/Dockerfile` and `docker-compose.yml` for misconfigurations
+
+**Teaching point:** This catches CVEs before you ship and secret leaks before they hit GitHub. Run it as part of every PR review.
+
+---
+
+### Demo B — Secret detection (show what it catches)
+
+Trivy's secret scanner looks for patterns matching AWS keys, GCP service accounts, generic API tokens, private keys, and more.
+
+To demonstrate what a detection looks like, temporarily add a fake key to any file:
+
+```bash
+echo "FAKE_KEY=AIzaSyFAKEKEY1234567890abcdefghijklmnop" >> /tmp/test_secret.txt
+trivy fs /tmp/test_secret.txt --scanners secret
+rm /tmp/test_secret.txt
+```
+
+**Teaching point:** This is why `.env` is in `.gitignore` and Render secrets are set via the dashboard — not `render.yaml`. The `sync: false` flag in `render.yaml` means the actual secret value is never written to the file.
+
+---
+
+### Demo C — Docker image scan
+
+Build the backend image and scan it for OS-level CVEs:
+
+```bash
+docker build -t ai-resume-analyzer-api:scan ./backend
+trivy image ai-resume-analyzer-api:scan --scanners vuln --severity HIGH,CRITICAL
+```
+
+**Teaching point:** Dependencies in your code aren't the only attack surface. The base OS image (`python:3.11-slim`) also has packages, and Trivy checks those too. This is why pinning base image digests (`FROM python:3.11-slim@sha256:...`) matters in production.
+
+---
+
+### Demo D — Run the full local scan script
+
+```bash
+./scripts/scan.sh
+```
+
+This runs both the filesystem and image scans in sequence, mirroring exactly what the CI workflow does.
+
+---
+
+### Trivy in CI
+
+The `trivy-fs` and `trivy-image` jobs in `.github/workflows/ci.yml` run the same scans automatically (when GitHub Actions billing is active). Both jobs are set to `exit-code: 1` — they fail the pipeline on any `HIGH` or `CRITICAL` finding.
+
+To suppress a known false positive, add the CVE ID to `.trivyignore`:
+
+```
+# .trivyignore
+CVE-2023-12345  # known false positive in dev-only dep
+```
+
+---
+
+## 8. Architecture Summary for Presenters
 
 | Layer | Technology | Key point |
 |---|---|---|
@@ -272,4 +368,5 @@ To trigger the reference CI manually: GitHub → Actions → CI → Run workflow
 | AI | Gemini 2.5 Flash | Structured JSON output via `response_json_schema` |
 | Fallback | Local heuristics | Keyword scoring, no external calls |
 | Observability | `/health` `/metrics` | In-memory, per-process |
+| Security scanning | Trivy | CVE, secret, misconfig scanning — free, no account |
 | Deployment | Render (both services) | Auto-deploy on push, defined in `render.yaml` |
