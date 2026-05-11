@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     """Runtime configuration loaded from environment variables."""
 
     app_name: str = "AI Resume Analyzer API"
+    app_version: str = "1.0.0"
     environment: str = Field(default="development", validation_alias="ENVIRONMENT")
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
 

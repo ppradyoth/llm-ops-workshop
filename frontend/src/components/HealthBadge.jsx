@@ -16,6 +16,12 @@ export default function HealthBadge({ health }) {
           {health.gemini_configured ? "Gemini" : "Fallback"}
         </span>
       )}
+      {health?.version && (
+        <>
+          <span className="text-slate-500">·</span>
+          <span className="text-slate-500">v{health.version}</span>
+        </>
+      )}
     </div>
   );
 }

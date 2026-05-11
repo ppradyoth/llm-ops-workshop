@@ -12,6 +12,7 @@ async def health_check() -> HealthResponse:
     settings = get_settings()
     return HealthResponse(
         status="ok",
+        version=settings.app_version,
         environment=settings.environment,
         gemini_configured=bool(settings.gemini_api_key),
     )
@@ -34,6 +35,7 @@ async def readiness_check() -> ReadinessResponse:
     is_ready = checks["api"] and checks["configuration_loaded"] and checks["ai_analysis_available"]
     return ReadinessResponse(
         status="ok" if is_ready else "degraded",
+        version=settings.app_version,
         environment=settings.environment,
         gemini_configured=checks["gemini_configured"],
         checks=checks,
