@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from app.config import Settings, get_settings
 from app.schemas.resume import AnalyzePayload, AnalyzeResponse
 from app.services.gemini_service import GeminiResumeService
+from app.services.guardrail_service import GuardrailService
 from app.services.heuristic_service import HeuristicResumeService
 from app.utils.exceptions import BadRequestError
 from app.utils.pdf import extract_text_from_upload
@@ -14,17 +15,19 @@ logger = logging.getLogger(__name__)
 
 
 class ResumeAnalyzerService:
-    """Coordinates input extraction, validation, AI analysis, and fallback behavior."""
+    """Coordinates input extraction, validation, guardrails, AI analysis, and fallback."""
 
     def __init__(
         self,
         settings: Settings,
         gemini_service: GeminiResumeService,
         fallback_service: HeuristicResumeService,
+        guardrail_service: GuardrailService,
     ):
         self.settings = settings
         self.gemini_service = gemini_service
         self.fallback_service = fallback_service
+        self.guardrail_service = guardrail_service
 
     async def analyze(
         self,
@@ -35,6 +38,9 @@ class ResumeAnalyzerService:
     ) -> AnalyzeResponse:
         extracted_text = await self._resolve_resume_text(resume_text, resume_file)
         payload = self._validate_payload(extracted_text, target_role, job_description)
+
+        # Guardrails run after validation, before any AI call — zero tokens used.
+        self.guardrail_service.check(payload)
 
         if self.settings.gemini_api_key:
             try:
@@ -87,4 +93,5 @@ def get_resume_analyzer_service() -> ResumeAnalyzerService:
         settings=settings,
         gemini_service=GeminiResumeService(settings),
         fallback_service=HeuristicResumeService(),
+        guardrail_service=GuardrailService(),
     )

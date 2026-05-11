@@ -34,3 +34,8 @@ class AIOutputError(AppError):
 class AITimeoutError(AppError):
     def __init__(self, message: str) -> None:
         super().__init__(message=message, status_code=504, code="ai_timeout")
+
+
+class GuardrailError(AppError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message=message, status_code=400, code="guardrail_violation")
