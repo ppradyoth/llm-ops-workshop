@@ -243,7 +243,9 @@ pytest tests/test_analyze.py -v     # analyze endpoint tests
 
 ---
 
-## 6. CI/CD Story
+## 6. CI/CD and Release Story
+
+### Continuous Deployment (every push)
 
 ```
 git push origin main
@@ -258,6 +260,50 @@ git push origin main
 ```
 
 To trigger the reference CI manually: GitHub → Actions → CI → Run workflow.
+
+### Versioned Releases (on demand)
+
+When you want to ship a named version, tag it and create a GitHub Release:
+
+```bash
+# Tag the release
+git tag v1.1.0
+git push origin v1.1.0
+
+# Create the GitHub Release (triggers docker-publish.yml)
+gh release create v1.1.0 --title "v1.1.0 — <description>" --notes "<release notes>"
+```
+
+This triggers `.github/workflows/docker-publish.yml`, which:
+1. Builds the backend Docker image
+2. Pushes it to GitHub Container Registry (GHCR) with tags:
+   - `ghcr.io/ppradyoth/llm-ops-workshop/api:1.1.0`
+   - `ghcr.io/ppradyoth/llm-ops-workshop/api:1.1`
+   - `ghcr.io/ppradyoth/llm-ops-workshop/api:sha-<commit>`
+
+### Demo — Pull the published image
+
+```bash
+docker pull ghcr.io/ppradyoth/llm-ops-workshop/api:1.0.0
+docker run -p 8000:8000 -e ENABLE_AI_FALLBACK=true ghcr.io/ppradyoth/llm-ops-workshop/api:1.0.0
+curl http://localhost:8000/health
+```
+
+Expected: `{"status":"ok","version":"1.0.0","environment":"development",...}`
+
+**Teaching point:** The `version` field in `/health` comes directly from `app_version` in `config.py`. The Docker image tag and the API version are in sync because both are set at release time. This is the versioned artifact pattern — any environment can pull and run a specific, reproducible version of the service.
+
+### Full pipeline picture
+
+```
+Code change
+  → git push → Render auto-deploys (continuous delivery)
+  → git tag + gh release create
+      → docker-publish.yml triggers
+          → Docker build (backend/)
+          → Push to GHCR (ghcr.io/.../api:1.x.x)
+          → Image available to any environment (prod, staging, local)
+```
 
 ---
 
@@ -361,12 +407,14 @@ CVE-2023-12345  # known false positive in dev-only dep
 
 | Layer | Technology | Key point |
 |---|---|---|
-| Frontend | React + Vite + Tailwind | Dark mode, tab input, loading skeleton, engine badge |
+| Frontend | React + Vite + Tailwind | Dark mode, tab input, loading skeleton, engine badge, version display |
 | HTTP | FastAPI | Async, dependency injection, middleware stack |
 | Validation | Pydantic v2 | Input and output schemas enforced |
 | Guardrails | Custom rule-based | 0 tokens, instant, covers all input fields |
 | AI | Gemini 2.5 Flash | Structured JSON output via `response_json_schema` |
 | Fallback | Local heuristics | Keyword scoring, no external calls |
-| Observability | `/health` `/metrics` | In-memory, per-process |
+| Observability | `/health` `/metrics` | In-memory, per-process; version surfaced in `/health` |
 | Security scanning | Trivy | CVE, secret, misconfig scanning — free, no account |
 | Deployment | Render (both services) | Auto-deploy on push, defined in `render.yaml` |
+| Artifact registry | GHCR | Docker image published on every GitHub Release |
+| Versioning | Semantic versioning | `app_version` in config → `/health` response → Docker image tag |
