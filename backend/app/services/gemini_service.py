@@ -74,7 +74,8 @@ class GeminiResumeService:
             raise AIOutputError("Gemini returned an empty response.")
 
         try:
-            return AnalyzeResponse.model_validate_json(raw_text)
+            result = AnalyzeResponse.model_validate_json(raw_text)
+            return result.model_copy(update={"engine": "gemini"})
         except json.JSONDecodeError as exc:
             logger.warning("malformed_ai_json", extra={"raw_output": raw_text[:1000]})
             raise AIOutputError("Gemini returned malformed JSON.") from exc

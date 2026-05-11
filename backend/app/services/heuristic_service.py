@@ -56,6 +56,7 @@ class HeuristicResumeService:
             missing_skills=missing_skills,
             strengths=strengths,
             recommendations=recommendations,
+            engine="heuristic",
         )
 
     def _strengths(self, text: str, resume_skills: set[str]) -> list[str]:

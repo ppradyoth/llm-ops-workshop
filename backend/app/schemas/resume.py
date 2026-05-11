@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -19,6 +21,7 @@ class AnalyzeResponse(BaseModel):
     missing_skills: list[str] = Field(default_factory=list)
     strengths: list[str] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
+    engine: Literal["gemini", "heuristic"] = "heuristic"
 
     @field_validator("missing_skills", "strengths", "recommendations")
     @classmethod
