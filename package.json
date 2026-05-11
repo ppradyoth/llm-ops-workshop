@@ -1,0 +1,11 @@
+{
+  "name": "ai-resume-analyzer-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "frontend:dev": "npm --prefix frontend run dev",
+    "frontend:build": "npm --prefix frontend run build",
+    "backend:dev": "uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000",
+    "backend:test": "cd backend && pytest"
+  }
+}
