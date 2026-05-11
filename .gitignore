@@ -1,11 +1,32 @@
+# Environment secrets — never commit these
 .env
+.env.local
+.env.production
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+# Python
 .venv/
 __pycache__/
 *.pyc
+*.pyo
 .pytest_cache/
-node_modules/
-dist/
-.DS_Store
-.firebase/
-.dist/
 
+# Node
+node_modules/
+
+# Build output
+dist/
+.dist/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Firebase (no longer used for deployment)
+.firebase/
+
+# Trivy cache
+.trivy/

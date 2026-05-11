@@ -312,7 +312,7 @@ Trivy's secret scanner looks for patterns matching AWS keys, GCP service account
 To demonstrate what a detection looks like, temporarily add a fake key to any file:
 
 ```bash
-echo "FAKE_KEY=AIzaSyFAKEKEY1234567890abcdefghijklmnop" >> /tmp/test_secret.txt
+echo "DEMO_API_KEY=not-a-real-key-demo-purposes-only-1234567890abcdef" >> /tmp/test_secret.txt
 trivy fs /tmp/test_secret.txt --scanners secret
 rm /tmp/test_secret.txt
 ```

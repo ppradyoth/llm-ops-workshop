@@ -1,37 +1,77 @@
-# Troubleshooting Guide
+# Troubleshooting
 
-## Common Issues
+## Backend won't start
 
-### 1. Backend Fails to Start
-- **Check**: Environment variables in `.env` are set (especially `GEMINI_API_KEY` for production).
-- **Check**: Docker image builds without errors.
-- **Check**: Required Python packages are installed.
+- Check `.env` exists and `GEMINI_API_KEY` is set (or leave blank with `ENABLE_AI_FALLBACK=true`)
+- Check venv is active: `source backend/.venv/bin/activate`
+- Check port 8000 isn't already in use: `lsof -i :8000`
 
-### 2. Analyze Endpoint Returns 502/503/504
-- **Check**: Gemini API key is valid and not rate-limited.
-- **Check**: Network connectivity to Gemini API.
-- **Check**: Fallback logic is enabled for development.
-- **Check**: Logs for AI service errors or timeouts.
+## `400 guardrail_violation`
 
-### 3. Resume Upload Fails
-- **Check**: File is PDF or TXT and under size limit.
-- **Check**: Only one of text or file is provided.
+The request was blocked before reaching Gemini. Two possible causes:
 
-### 4. Frontend Cannot Reach Backend
-- **Check**: API base URL in frontend `.env` matches backend URL.
-- **Check**: CORS settings allow frontend origin.
+**Topicality rail** — the resume text has fewer than 4 recognisable resume signal words. Fix: submit a proper resume (experience, skills, education keywords expected).
 
-### 5. Metrics or Health Endpoints Unreachable
-- **Check**: Backend is running and accessible on port 8000.
-- **Check**: No firewall or network blockages.
+**Injection rail** — one of the input fields (`resume_text`, `target_role`, `job_description`) matched a prompt injection pattern. Fix: remove phrases like "ignore previous instructions", "you are now", "act as", etc.
 
-## Debugging Tips
+Check logs for `guardrail_injection_blocked` or `guardrail_topicality_blocked` with the matched pattern.
 
-- Use logs for request IDs and error context.
-- Use `/metrics` to check for error spikes or latency.
-- Use `/health` to verify environment and Gemini config.
+## `400 bad_request` — resume too short
 
-## Extending Troubleshooting
+Minimum 80 characters. The sample resume pre-filled in the UI is always long enough.
 
-- Add more granular error codes and messages.
-- Integrate with external monitoring for alerting.
+## `502 ai_service_error` / `504 ai_timeout`
+
+Gemini call failed after retries. If `ENABLE_AI_FALLBACK=true`, the heuristic service should have responded instead. Check:
+- `gemini_configured: false` in `/health` means `GEMINI_API_KEY` is missing or empty
+- Rate limit exceeded — Gemini free tier is 15 RPM / 1 500 req/day
+- Render backend is cold-starting — first request after inactivity takes ~30s
+
+## `503 ai_configuration_error`
+
+`GEMINI_API_KEY` is not set and `ENABLE_AI_FALLBACK=false`. Either add the key or set `ENABLE_AI_FALLBACK=true`.
+
+## Frontend shows "Could not reach the backend"
+
+The `fetch` to the backend timed out or was refused. Common causes:
+
+1. **Render cold start** — wait 30s and try again; the green dot in the header will appear when ready
+2. **CORS** — check `CORS_ORIGINS` on the backend includes the frontend URL exactly
+3. **Wrong API URL** — check `VITE_API_BASE_URL` in `frontend/.env` matches the backend URL
+
+## Resume file upload fails
+
+- Only PDF and TXT accepted
+- Maximum 5 MB
+- Don't provide both `resume_text` and `resume_file` simultaneously — the tab switcher in the UI prevents this, but direct API calls can hit it
+
+## Metrics show high error rate
+
+```bash
+curl https://llm-ops-workshop-api.onrender.com/metrics
+```
+
+- High `total_errors` with low `total_requests` → likely Gemini errors; check `/health` for `gemini_configured`
+- Low latency errors → likely guardrail violations (instant rejection, no AI call)
+- High latency errors → likely Gemini timeouts; check `GEMINI_TIMEOUT_SECONDS`
+
+## Trivy scan flags a vulnerability
+
+Add the CVE ID to `.trivyignore` with a comment explaining why it's acceptable:
+
+```
+# .trivyignore
+CVE-2023-12345  # dev-only dependency, not in production image
+```
+
+Then re-run the scan to confirm it's suppressed.
+
+## Dark mode doesn't toggle
+
+The theme is stored in `localStorage` under the key `theme`. To reset:
+
+```js
+// In browser console
+localStorage.removeItem('theme')
+location.reload()
+```

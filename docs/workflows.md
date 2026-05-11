@@ -2,39 +2,75 @@
 
 ## Local Development
 
-1. Clone the repository.
-2. Copy `.env.example` to `.env` and set required variables.
-3. Start backend and frontend using Docker Compose:
-   ```bash
-   docker-compose up --build
-   ```
-4. Access frontend at `http://localhost:5173` and backend at `http://localhost:8000`.
+```bash
+# 1. Clone and set up environment
+git clone https://github.com/ppradyoth/llm-ops-workshop.git
+cd llm-ops-workshop
+cp .env.example .env
+cp frontend/.env.example frontend/.env
+
+# 2. Start backend
+cd backend && python3.11 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+
+# 3. Start frontend (new terminal)
+cd frontend && npm install && npm run dev
+```
+
+Or with Docker:
+```bash
+docker compose up --build backend
+```
 
 ## Testing
 
-- Run backend tests:
-  ```bash
-  cd backend
-  pytest
-  ```
-- Frontend tests (if present) can be run via npm scripts.
+```bash
+cd backend && source .venv/bin/activate
+
+pytest                              # all 15 tests
+pytest tests/test_guardrails.py -v  # guardrail tests only
+pytest tests/test_analyze.py -v     # analyze endpoint tests
+```
+
+## Security Scanning
+
+```bash
+# Install Trivy (macOS)
+brew install aquasecurity/trivy/trivy
+
+# Full scan (filesystem + image)
+./scripts/scan.sh
+
+# Quick filesystem scan only
+trivy fs . --scanners vuln,secret,misconfig --severity HIGH,CRITICAL
+```
 
 ## Deployment
 
-- **Backend**: Deploy to Render using `render.yaml` (Docker-based, health checks enabled).
-- **Frontend**: Deploy to Firebase Hosting using `firebase.json` and Vite build output.
+Both services auto-deploy on every push to `main` via Render:
 
-## CI/CD
+- **Backend** (Docker): `https://llm-ops-workshop-api.onrender.com`
+- **Frontend** (Static): `https://llm-ops-workshop.onrender.com`
 
-- GitHub Actions workflow runs tests and builds on push.
-- Linting, type checks, and test coverage can be added as needed.
+To trigger manually from Render dashboard: **Manual Deploy → Deploy latest commit**.
+
+## CI Reference
+
+`.github/workflows/ci.yml` defines four jobs: `backend`, `frontend`, `trivy-fs`, `trivy-image`. Currently set to `workflow_dispatch` (manual only). To enable automatic runs on push, update the `on:` trigger in the workflow file.
 
 ## Monitoring
 
-- Access `/metrics` endpoint for real-time operational stats.
-- Use `/health` for liveness checks.
+```bash
+# Live health + Gemini status
+curl https://llm-ops-workshop-api.onrender.com/health
+
+# Request counts, error rate, average latency
+curl https://llm-ops-workshop-api.onrender.com/metrics
+```
 
 ## Failure Recovery
 
-- If Gemini API fails, system falls back to local analysis.
-- All errors are logged with request IDs for traceability.
+- If Gemini API fails: system falls back to heuristic analysis (`ENABLE_AI_FALLBACK=true`)
+- Guardrail violations return `400 guardrail_violation` immediately — no AI call made
+- All errors logged with `request_id` for tracing

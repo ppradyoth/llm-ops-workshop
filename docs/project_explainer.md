@@ -1,180 +1,124 @@
-# Project Explainer: AI Resume Analyzer & Career Assistant
+# Project Explainer — AI Resume Analyzer
+
+High-context system overview for AI agents, contributors, and workshop facilitators.
 
 ---
 
-## 1. Project Purpose
+## Purpose
 
-To provide a production-style, reliable, and extensible AI-powered resume analysis and career assistant system. The project demonstrates best practices in AI orchestration, validation, monitoring, and deployment for MLOps education and real-world readiness.
+A production-style AI-powered resume analyzer that demonstrates MLOps best practices: input validation, rule-based guardrails, AI orchestration with fallback, structured outputs, observability, security scanning, and cloud-native deployment.
 
-## 2. System Goals
+---
 
-- Deliver actionable, structured resume analysis using state-of-the-art AI (Gemini API)
-- Ensure reliability, observability, and graceful degradation
-- Be easy to extend, debug, and operate by both humans and AI agents
-- Serve as a reference for production-grade MLOps and AI system design
+## Mental Model
 
-## 3. High-Level Architecture
+```
+User input
+  → Pydantic (validate shape and length)
+  → GuardrailService (rule-based: injection + topicality, zero tokens)
+  → GeminiResumeService (Gemini API, retry + timeout, JSON schema enforced)
+     ↳ HeuristicResumeService (fallback, local keyword scoring)
+  → AnalyzeResponse (Pydantic validates output)
+  → JSON with engine field ("gemini" | "heuristic")
+```
+
+The guardrail layer is the critical MLOps addition — it sits between validation and AI, consuming zero tokens, and blocking obvious attacks and off-topic inputs before they reach the expensive layer.
+
+---
+
+## System Architecture
 
 ```mermaid
 flowchart TD
-  FE["React Frontend"] --> API["FastAPI Backend"]
-  API --> VAL["Validation Layer"]
-  VAL --> AI["Gemini API Service"]
-  AI --> OUT["Structured Output"]
-  API --> LOG["Logging & Monitoring"]
-```
+  FE["React + Vite\n(Render Static)"]
+  API["FastAPI\n(Render Docker)"]
+  GRD["GuardrailService\nRule-based, 0 tokens"]
+  GEM["GeminiResumeService\nStructured output"]
+  HEU["HeuristicResumeService\nLocal fallback"]
+  MON["Monitoring\n/health /metrics"]
 
-- **Frontend**: React + Vite, TailwindCSS
-- **Backend**: FastAPI, modular services, strict validation
-- **AI Layer**: Gemini API (with fallback)
-- **Deployment**: Docker, Render (backend), Firebase (frontend)
-
-## 4. Component Responsibilities
-
-- **Frontend**: Collects user input, displays results, handles errors, and health status.
-- **Backend**: Orchestrates validation, AI calls, fallback, and structured output. Exposes `/analyze`, `/health`, `/metrics`.
-- **AI Layer**: Handles prompt construction, Gemini API calls, output schema enforcement, and fallback logic.
-- **Monitoring**: Tracks requests, errors, and latency for observability.
-
-## 5. Backend Orchestration Flow
-
-1. Receive request (resume text/file, target role, job description)
-2. Validate input (schema, file type, size, mutual exclusivity)
-3. Extract text from file if needed
-4. Build analysis payload
-5. Call Gemini API (with timeout/retry)
-6. If Gemini fails, fallback to local heuristic analysis
-7. Validate and return structured JSON response
-8. Log request, errors, and metrics
-
-## 6. AI Integration Flow
-
-- Gemini API is called with a prompt and strict JSON schema
-- Output is validated against schema (Pydantic)
-- Fallback logic ensures reliability if Gemini is unavailable
-- All AI errors are logged and surfaced with request IDs
-
-## 7. Validation & Reliability Layers
-
-- Pydantic schemas for all input/output
-- Centralized error handling and logging
-- Timeout and retry logic for AI calls
-- Fallback to local analysis for resilience
-- Health and metrics endpoints for monitoring
-
-## 8. Deployment Architecture
-
-- Backend: Dockerized, deployed to Render via `render.yaml`
-- Frontend: Static build, deployed to Firebase Hosting
-- Local: `docker-compose.yml` for unified dev experience
-
-## 9. Monitoring & Observability
-
-- In-memory metrics store tracks requests, errors, latency
-- `/metrics` endpoint exposes operational stats
-- Structured logging with request context and error details
-
-## 10. Security & Guardrails
-
-- Input validation and sanitization
-- File type/size restrictions
-- No persistent storage of user data
-- Secrets managed via environment variables
-- CORS restricts frontend origins
-- Error responses never leak sensitive info
-
-## 11. CI/CD Workflow
-
-- GitHub Actions runs tests and builds on push
-- Backend deployed to Render, frontend to Firebase
-- Health checks and metrics ensure operational readiness
-
-## 12. Failure Modes
-
-- **Gemini API outage**: Fallback to local analysis, log incident, return degraded output
-- **Input errors**: Return actionable error with request ID
-- **Unexpected exceptions**: Log and return generic error with traceability
-
-## 13. Engineering Tradeoffs
-
-- **Strict schema enforcement**: Ensures reliability but may reject ambiguous input
-- **In-memory monitoring**: Simple for demo, not persistent for production
-- **No persistent storage**: Reduces risk, but limits auditability
-- **Fallback logic**: Prioritizes reliability over perfect accuracy
-
-## 14. Future Extension Points
-
-- Add authentication/authorization for multi-user scenarios
-- Integrate persistent monitoring/logging (e.g., Prometheus, ELK)
-- Support more file types or languages
-- Add more granular analytics and alerting
-- Extend AI logic for richer recommendations
-
-## 15. Key Operational Principles
-
-- Favor reliability and observability over feature creep
-- All errors are actionable and traceable
-- System is safe to operate in demo and real-world settings
-- Designed for easy extension by both humans and AI agents
-
-## 16. Mental Model of the Entire System
-
-- **Input**: User provides resume and context
-- **Validation**: Backend enforces schema and safety
-- **Orchestration**: Backend coordinates extraction, AI, fallback, and output
-- **AI Analysis**: Gemini (or fallback) produces structured recommendations
-- **Output**: Strict JSON returned to frontend
-- **Monitoring**: Every request is logged and measured
-- **Deployment**: Containers ensure reproducibility and portability
-
----
-
-## Request Lifecycle Diagram
-
-```mermaid
-sequenceDiagram
-  participant User
-  participant FE as Frontend
-  participant BE as Backend
-  participant AI as Gemini API
-
-  User->>FE: Submit resume & context
-  FE->>BE: POST /analyze
-  BE->>BE: Validate & extract text
-  BE->>AI: Analyze via Gemini
-  AI-->>BE: Structured JSON
-  BE-->>FE: Return analysis
-  FE-->>User: Display results
+  FE -->|"multipart/form-data"| API
+  API --> GRD
+  GRD -->|pass| GEM
+  GRD -->|violation| FE
+  GEM -->|fail/no key| HEU
+  GEM --> FE
+  HEU --> FE
+  API --> MON
 ```
 
 ---
 
-## Deployment Diagram
+## File Map (key files only)
 
-```mermaid
-flowchart TD
-  Dev[Developer]
-  Dev -->|Push| GitHub[GitHub]
-  GitHub -->|CI/CD| Render[Render Backend]
-  Render -->|Docker Build| Backend[FastAPI API]
-  Backend -->|/health| HealthCheck[Render Health]
-  GitHub -->|CI/CD| Firebase[Firebase Hosting]
-  Firebase --> Frontend[React App]
+```
+backend/app/
+  main.py                  — app setup, middleware, global error handlers
+  config.py                — Settings (pydantic-settings, lru_cache)
+  routers/analyze.py       — POST /analyze endpoint
+  routers/health.py        — GET /health /live /ready /metrics
+  schemas/resume.py        — AnalyzePayload, AnalyzeResponse, ANALYSIS_JSON_SCHEMA
+  services/resume_service.py    — pipeline coordinator
+  services/guardrail_service.py — injection + topicality rails
+  services/gemini_service.py    — Gemini API, retry, structured output
+  services/heuristic_service.py — local keyword scoring fallback
+  services/monitoring_service.py — in-memory metrics singleton
+  utils/exceptions.py      — AppError hierarchy (includes GuardrailError)
+  utils/retry.py           — retry_async decorator (exponential backoff + jitter)
+  utils/pdf.py             — PDF/TXT text extraction
+  utils/logging.py         — structured JSON logging setup
+
+frontend/src/
+  App.jsx                  — theme hook, layout, nav, hero, steps, analyzer, footer
+  lib/api.js               — analyzeResume(), getHealth()
+  components/Logo.jsx      — SVG document mark
+  components/ThemeToggle.jsx    — dark/light toggle (moon/sun icons)
+  components/AnalysisForm.jsx   — tab input (text/file), form, submit
+  components/ResultPanel.jsx    — skeleton, empty state, score ring, list blocks
+  components/HealthBadge.jsx    — backend status + engine indicator
+  components/ErrorBanner.jsx    — inline error display
+  components/ErrorBoundary.jsx  — React error boundary with reset
 ```
 
 ---
 
-## How to Safely Extend the System
+## Invariants (never violate these)
 
-- Add new endpoints by creating routers and services in backend
-- Extend AI logic by updating Gemini or heuristic services
-- Add new validation or monitoring layers as needed
-- Update frontend components for new features
-- Always enforce schema validation and structured outputs
-- Document all changes for future agents and contributors
+1. `GuardrailService.check()` is called before every AI call in `ResumeAnalyzerService.analyze()`
+2. Every `AnalyzeResponse` has `engine` set — `"gemini"` or `"heuristic"`
+3. All config is accessed via `get_settings()` — never `os.environ` directly in services
+4. `AnalyzeResponse.model_validate_json()` validates Gemini output before it returns
+5. Resume text and PII are never written to logs
 
 ---
 
-## Summary
+## Extension Points
 
-This project is engineered for clarity, reliability, and extensibility. Every component, validation, and workflow is designed to be understandable and maintainable by both humans and advanced AI agents. The system is safe to operate, easy to extend, and robust against failures, making it an ideal reference for modern AI-powered MLOps systems.
+| Want to add | Where |
+|---|---|
+| New API endpoint | `app/routers/` + `app/services/` + `app/schemas/` + wire in `main.py` |
+| New guardrail rule | `guardrail_service.py` — add pattern to `_INJECTION_PATTERNS` or signal to `_RESUME_SIGNALS` |
+| Different AI provider | Implement same interface as `GeminiResumeService`, swap in `get_resume_analyzer_service()` |
+| Persistent metrics | Replace `MonitoringService` with Prometheus client, expose `/metrics` in Prometheus format |
+| Authentication | Add FastAPI dependency to routers, inject before guardrail check |
+| New frontend section | Add component in `frontend/src/components/`, import in `App.jsx` |
+
+---
+
+## Deployment
+
+Both services defined in `render.yaml`. Auto-deploy on push to `main`.
+
+| Service | Type | URL |
+|---|---|---|
+| Backend | Docker web service | `https://llm-ops-workshop-api.onrender.com` |
+| Frontend | Static site | `https://llm-ops-workshop.onrender.com` |
+
+---
+
+## CI / Security
+
+- `.github/workflows/ci.yml` — pytest + npm build + Trivy fs scan + Trivy image scan (manual trigger only)
+- `scripts/scan.sh` — run all scans locally
+- `.trivyignore` — suppress known false positives by CVE ID
+- `.env` files are gitignored; secrets live in Render environment variables only
