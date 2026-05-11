@@ -1,79 +1,113 @@
-# CI/CD Reference
+# CI/CD + Security Scanning Reference
 #
 # This workflow is provided as a reference for workshop participants.
 # It is not active on this account (GitHub Actions billing is disabled).
 #
 # How CI/CD works in this project:
+#   CI (tests + build + security scan) → defined here, run via GitHub Actions on paid accounts
+#   CD backend  → Render auto-deploys on every push to main (Docker build)
+#   CD frontend → Render auto-deploys on every push to main (static build)
 #
-#   CI (tests + build checks) → defined here, run via GitHub Actions on paid accounts
-#   CD backend  → Render watches this GitHub repo and auto-deploys on every push to main
-#   CD frontend → `npm run build && firebase deploy` run locally (or via this workflow on paid accounts)
-#
-# To run checks locally instead:
-#   Backend: cd backend && source .venv/bin/activate && pytest
-#   Frontend: cd frontend && npm run build
+# To run checks locally:
+#   Backend tests:  cd backend && pytest
+#   Frontend build: cd frontend && npm run build
+#   Security scan:  trivy fs . --scanners vuln,secret,misconfig
+#   Image scan:     trivy image ai-resume-analyzer-api
 
 name: CI
 
 on:
-  workflow_dispatch:  # manual trigger only — remove this and uncomment below to enable automatic runs
+  workflow_dispatch:  # manual only — uncomment push/pull_request below when billing is active
   # push:
   #   branches: [main]
   # pull_request:
   #   branches: [main]
 
 jobs:
+  # ── Backend tests ────────────────────────────────────────────────────────────
   backend:
+    name: Backend tests
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install backend dependencies
+      - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run backend tests
+      - name: Run tests
         env:
           ENABLE_AI_FALLBACK: "true"
         run: pytest
 
+  # ── Frontend build ───────────────────────────────────────────────────────────
   frontend:
+    name: Frontend build
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install frontend dependencies
+      - name: Install dependencies
         run: npm install
 
-      - name: Build frontend
+      - name: Build
         env:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
         run: npm run build
 
-      # Uncomment to enable automatic Firebase deploy on push to main:
-      # - name: Deploy to Firebase Hosting
-      #   uses: FirebaseExtended/action-hosting-deploy@v0
-      #   with:
-      #     repoToken: ${{ secrets.GITHUB_TOKEN }}
-      #     firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-      #     projectId: ml-ops-42f07
-      #     channelId: live
+  # ── Trivy filesystem scan ────────────────────────────────────────────────────
+  # Scans the repository for:
+  #   - vuln:      known CVEs in Python (requirements.txt) and npm (package-lock.json) deps
+  #   - secret:    accidentally committed secrets, API keys, tokens
+  #   - misconfig: Dockerfile and docker-compose misconfigurations
+  trivy-fs:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "1"          # fail the job if HIGH/CRITICAL found
+          format: table
+
+  # ── Trivy Docker image scan ──────────────────────────────────────────────────
+  # Builds the backend Docker image and scans it for OS + library CVEs.
+  trivy-image:
+    name: Trivy image scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend Docker image
+        run: docker build -t ai-resume-analyzer-api:ci ./backend
+
+      - name: Run Trivy image scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: image
+          image-ref: ai-resume-analyzer-api:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          format: table

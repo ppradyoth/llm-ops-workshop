@@ -1,0 +1,6 @@
+# Trivy ignore file
+# Add CVE IDs or finding IDs here to suppress known false positives.
+# Format: CVE-YYYY-XXXXX
+#
+# Example:
+# CVE-2023-12345  # reason for suppression
