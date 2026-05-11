@@ -112,3 +112,15 @@ All config lives in `app/config.py` (pydantic-settings, `get_settings()` with `l
 3. Add Pydantic schemas in `app/schemas/my_feature.py`
 4. Wire the router into `app/main.py` via `app.include_router()`
 5. Add tests in `backend/tests/test_my_feature.py`
+
+## Security
+
+**Secrets** — all secrets are environment variables. `.env` is gitignored and never committed. `GEMINI_API_KEY` lives only on the backend; Render secrets use `sync: false` so they are never written to `render.yaml`.
+
+**CORS** — `CORS_ORIGINS` is a comma-separated list of allowed origins. Set to `http://localhost:5173` locally, the Render frontend URL in production.
+
+**Logging** — structured JSON logs include `request_id`, path, and status. Resume text and personal data are never written to logs.
+
+**No persistent storage** — no user data (resumes, results, PII) is stored on disk or in a database. All processing is stateless and in-memory per request.
+
+**Error responses** — never expose stack traces, internal paths, raw third-party exceptions, or secrets. Every error includes `request_id` for log correlation.

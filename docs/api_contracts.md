@@ -77,6 +77,7 @@ curl -X POST https://llm-ops-workshop-api.onrender.com/analyze \
 ```json
 {
   "status": "ok",
+  "version": "1.0.0",
   "environment": "production",
   "gemini_configured": true
 }
