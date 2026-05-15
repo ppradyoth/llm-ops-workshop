@@ -1,10 +1,9 @@
-# CI/CD + Security Scanning Reference
+# CI/CD + Security Scanning
 #
-# This workflow is provided as a reference for workshop participants.
-# It is not active on this account (GitHub Actions billing is disabled).
+# Runs on every push and pull request to main.
 #
 # How CI/CD works in this project:
-#   CI (tests + build + security scan) → defined here, run via GitHub Actions on paid accounts
+#   CI (tests + build + security scan) → GitHub Actions (this file)
 #   CD backend  → Render auto-deploys on every push to main (Docker build)
 #   CD frontend → Render auto-deploys on every push to main (static build)
 #
@@ -17,11 +16,11 @@
 name: CI
 
 on:
-  workflow_dispatch:  # manual only — uncomment push/pull_request below when billing is active
-  # push:
-  #   branches: [main]
-  # pull_request:
-  #   branches: [main]
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   # ── Backend tests ────────────────────────────────────────────────────────────
