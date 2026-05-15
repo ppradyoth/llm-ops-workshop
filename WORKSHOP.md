@@ -219,7 +219,7 @@ cp frontend/.env.example frontend/.env
 
 # Backend
 cd backend
-python3.11 -m venv .venv && source .venv/bin/activate
+python3.13 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
@@ -376,7 +376,7 @@ docker build -t ai-resume-analyzer-api:scan ./backend
 trivy image ai-resume-analyzer-api:scan --scanners vuln --severity HIGH,CRITICAL
 ```
 
-**Teaching point:** Dependencies in your code aren't the only attack surface. The base OS image (`python:3.11-slim`) also has packages, and Trivy checks those too. This is why pinning base image digests (`FROM python:3.11-slim@sha256:...`) matters in production.
+**Teaching point:** Dependencies in your code aren't the only attack surface. The base OS image (`python:3.13-slim`) also has packages, and Trivy checks those too. This is why pinning base image digests (`FROM python:3.13-slim@sha256:...`) matters in production.
 
 ---
 

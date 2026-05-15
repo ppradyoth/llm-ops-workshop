@@ -11,7 +11,7 @@ Production-grade AI Resume Analyzer & Career Assistant. Demonstrates reliable AI
 ## Architecture Summary
 
 - **Frontend**: React 19, Vite, TailwindCSS — dark/light mode, tab-based input, loading skeleton
-- **Backend**: FastAPI (Python 3.11) — layered pipeline: validation → guardrails → AI → response
+- **Backend**: FastAPI (Python 3.13) — layered pipeline: validation → guardrails → AI → response
 - **Guardrail Layer**: Rule-based `GuardrailService` — injection rail + topicality rail, zero tokens
 - **AI Layer**: Gemini 2.5 Flash — structured output enforced by `response_json_schema` + Pydantic
 - **Fallback**: `HeuristicResumeService` — local keyword scoring, no external calls
