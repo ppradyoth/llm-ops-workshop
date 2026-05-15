@@ -40,10 +40,11 @@ docker compose up --build backend
 ### Deploy
 
 ```bash
-# Frontend to Render (auto on push, or manual build + deploy)
-cd frontend && npm run build
-# Push to GitHub → Render auto-deploys both services
+# Push to main → GitHub Actions CI runs → on pass, triggers Render deploy hooks
+git push origin main
 ```
+
+Render auto-deploy is **disabled** on both services. Deploys are triggered only by the `deploy` job in `.github/workflows/ci.yml`, which runs after all tests and Trivy scans pass.
 
 ### Environment setup
 
@@ -94,8 +95,8 @@ Dark mode: Tailwind `class` strategy, toggled on `<html>`, stored in `localStora
 
 - **Backend**: Docker → Render, health check on `/health`, defined in `render.yaml`
 - **Frontend**: Static Vite build → Render static site, SPA rewrite to `/index.html`, defined in `render.yaml`
-- **Both auto-deploy** on push to `main`
-- **CI**: `.github/workflows/ci.yml` — manual trigger only (reference file for workshop)
+- **Render auto-deploy is disabled** on both services — deploys are triggered via hooks from GitHub Actions
+- **CI**: `.github/workflows/ci.yml` — runs on every push/PR to `main`; deploy job fires only after backend tests, frontend build, and both Trivy scans pass
 
 ## Environment Variables
 

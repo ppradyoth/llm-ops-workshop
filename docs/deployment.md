@@ -2,24 +2,46 @@
 
 ## Overview
 
-Both frontend and backend auto-deploy to Render on every push to `main`. No manual deploy steps required after initial setup.
+Deploys to Render are gated on CI passing. Render auto-deploy is **disabled** on both services. Every push to `main` triggers GitHub Actions — only if all jobs pass (tests + Trivy scans) does the pipeline fire the Render deploy hooks.
 
 ## Deployment Diagram
 
 ```mermaid
 flowchart TD
   Dev[Developer]
-  GH[GitHub\nppradyoth/llm-ops-workshop]
+  GH[GitHub Actions\nci.yml]
   RB[Render\nBackend Docker]
   RF[Render\nFrontend Static]
   GEM[Gemini API\nGoogle AI]
 
   Dev -->|git push main| GH
-  GH -->|auto-deploy| RB
-  GH -->|auto-deploy| RF
+  GH -->|tests + trivy pass| RB
+  GH -->|tests + trivy pass| RF
   RB -->|API calls| GEM
   RF -->|HTTP requests| RB
 ```
+
+## CI/CD Pipeline
+
+```
+git push origin main
+  └─► GitHub Actions (.github/workflows/ci.yml)
+        ├─ backend        — pytest (Python 3.13)
+        ├─ frontend       — npm build
+        ├─ trivy-fs       — CVE + secret + misconfig scan on repo
+        ├─ trivy-image    — CVE scan on built Docker image
+        └─ deploy         — runs only on main, only if all above pass
+              ├─ curl RENDER_DEPLOY_HOOK_URL          → backend deploy
+              └─ curl RENDER_DEPLOY_HOOK_URL_FRONTEND → frontend deploy
+```
+
+**GitHub Actions secrets required:**
+| Secret | Purpose |
+|---|---|
+| `RENDER_DEPLOY_HOOK_URL` | Render backend deploy hook |
+| `RENDER_DEPLOY_HOOK_URL_FRONTEND` | Render frontend deploy hook |
+
+Both are set via `gh secret set` and never appear in the codebase.
 
 ## Services
 
@@ -75,11 +97,7 @@ Or with Docker:
 docker compose up --build backend
 ```
 
-## CI Reference
-
-`.github/workflows/ci.yml` is included as a reference for workshop participants. It is set to `workflow_dispatch` (manual only) due to account billing. To enable automatic runs on push, update the `on:` trigger and ensure GitHub Actions billing is active.
-
-To run checks locally:
+## Running checks locally
 
 ```bash
 # Backend tests
@@ -87,7 +105,14 @@ cd backend && pytest
 
 # Frontend build check
 cd frontend && npm run build
+
+# Security scan (requires Trivy)
+trivy fs . --scanners vuln,secret,misconfig --severity HIGH,CRITICAL
 ```
+
+## Trivy vulnerability suppression
+
+Unfixable OS-level CVEs (no upstream fix available) are listed in `.trivyignore` at the repo root with a comment explaining each suppression.
 
 ## Environment Variable Reference
 

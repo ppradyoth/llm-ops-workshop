@@ -245,21 +245,24 @@ pytest tests/test_analyze.py -v     # analyze endpoint tests
 
 ## 6. CI/CD and Release Story
 
-### Continuous Deployment (every push)
+### Continuous Deployment (every push to main)
 
 ```
 git push origin main
       │
-      ├─► Render detects push
-      │     ├─ Backend: Docker build → health check → live   (~2–3 min)
-      │     └─ Frontend: npm build → publish dist/ → live    (~1 min)
-      │
-      └─► .github/workflows/ci.yml  (reference only — manual trigger)
-            ├─ Backend: pip install + pytest
-            └─ Frontend: npm install + npm build
+      └─► GitHub Actions (.github/workflows/ci.yml)
+            ├─ backend tests     (pytest, Python 3.13)
+            ├─ frontend build    (npm build)
+            ├─ trivy-fs scan     (CVE + secret + misconfig)
+            ├─ trivy-image scan  (Docker image CVE scan)
+            └─ deploy job        (only if ALL above pass)
+                  ├─ curl → Render backend deploy hook  (~2–3 min)
+                  └─ curl → Render frontend deploy hook (~1 min)
 ```
 
-To trigger the reference CI manually: GitHub → Actions → CI → Run workflow.
+Render auto-deploy is **disabled** on both services. A failing test or Trivy finding blocks the deploy entirely.
+
+To watch it live: **GitHub → Actions tab → latest workflow run**
 
 ### Versioned Releases (on demand)
 
