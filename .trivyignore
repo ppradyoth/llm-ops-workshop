@@ -1,6 +1,9 @@
 # Trivy ignore file
 # Add CVE IDs or finding IDs here to suppress known false positives.
 # Format: CVE-YYYY-XXXXX
-#
-# Example:
-# CVE-2023-12345  # reason for suppression
+
+# OS-level CVEs in python:3.13-slim (Debian 13.4) with no fixed version available.
+# These are upstream Debian issues — suppressed until patches are released.
+CVE-2026-4878   # libcap2: privilege escalation via TOCTOU race condition
+CVE-2025-69720  # ncurses: buffer overflow (libncursesw6, libtinfo6, ncurses-base, ncurses-bin)
+CVE-2026-29111  # systemd: arbitrary code execution via spurious IPC (libsystemd0, libudev1)
