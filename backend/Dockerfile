@@ -1,3 +1,10 @@
+# ── Stage 1: Dependency vulnerability scan ────────────────────────────────────
+FROM aquasec/trivy:latest AS scanner
+WORKDIR /scan
+COPY requirements.txt .
+RUN trivy fs --exit-code 1 --no-progress --severity HIGH,CRITICAL --scanners vuln .
+
+# ── Stage 2: Runtime ───────────────────────────────────────────────────────────
 FROM python:3.13-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1
