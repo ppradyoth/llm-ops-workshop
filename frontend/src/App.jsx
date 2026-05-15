@@ -59,7 +59,7 @@ export default function App() {
   useEffect(() => {
     getHealth()
       .then(setHealth)
-      .catch(() => setHealth(null));
+      .catch(() => setHealth({ status: "offline" }));
   }, []);
 
   async function handleAnalyze(formValues) {

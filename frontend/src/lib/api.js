@@ -44,7 +44,7 @@ export async function analyzeResume({ resumeText, resumeFile, targetRole, jobDes
       body: formData,
     });
   } catch (error) {
-    throw new Error(`Could not reach the backend at ${API_BASE_URL}.`);
+    throw new Error("The backend is unreachable. It probably went for chai — try again in a moment.");
   }
 
   const body = await parseResponse(response).catch(() => ({}));
